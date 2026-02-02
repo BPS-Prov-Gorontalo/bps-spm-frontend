@@ -1,9 +1,17 @@
 // src/pages/FlagManagementPage.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../api';
 import Modal from '../components/Modal';
-import { Plus, Edit, Trash2, FolderPlus } from 'lucide-react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  FolderPlus,
+  X,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react';
 
 // --- DAFTAR DOKUMEN STANDAR (Sesuai Excel/CSV) ---
 const STANDARD_DOCUMENTS = [
@@ -67,9 +75,36 @@ const STANDARD_DOCUMENTS = [
   'ID SiRUP',
   'Daftar Rekapitulasi Belanja Honor',
   'SPJ',
-].sort(); // Diurutkan abjad agar mudah dicari
+].sort();
 
-// Form untuk Menambah Kode Akun Baru
+// --- COMPONENTS ---
+
+// 1. Notification Banner Component
+function NotificationBanner({ notification, onClose }) {
+  if (!notification) return null;
+
+  const isError = notification.type === 'error';
+  const bgColor = isError
+    ? 'bg-red-100 border-red-400 text-red-700'
+    : 'bg-green-100 border-green-400 text-green-700';
+  const Icon = isError ? AlertCircle : CheckCircle;
+
+  return (
+    <div
+      className={`border-l-4 p-4 mb-4 rounded shadow-sm flex justify-between items-start ${bgColor}`}
+    >
+      <div className="flex items-center gap-3">
+        <Icon size={20} />
+        <p className="font-medium">{notification.message}</p>
+      </div>
+      <button onClick={onClose} className="opacity-60 hover:opacity-100">
+        <X size={18} />
+      </button>
+    </div>
+  );
+}
+
+// 2. Kode Akun Form
 function KodeAkunForm({ onSuccess, onCancel }) {
   const [kode, setKode] = useState('');
   const [nama, setNama] = useState('');
@@ -116,10 +151,8 @@ function KodeAkunForm({ onSuccess, onCancel }) {
   );
 }
 
-// Form untuk Menambah/Edit Flag (Updated with Dropdown)
+// 3. Flag Form (Document Requirements)
 function FlagForm({ flag, kodeAkunId, onSuccess, onCancel }) {
-  // Jika sedang edit, gunakan nama yang sudah ada.
-  // Jika nama existing tidak ada di list standar, otomatis masuk mode manual.
   const isStandard = !flag?.nama || STANDARD_DOCUMENTS.includes(flag.nama);
 
   const [inputMode, setInputMode] = useState(isStandard ? 'select' : 'manual');
@@ -129,16 +162,17 @@ function FlagForm({ flag, kodeAkunId, onSuccess, onCancel }) {
   const [manualName, setManualName] = useState(
     !isStandard ? flag?.nama || '' : '',
   );
-
   const [tipe, setTipe] = useState(flag?.tipe || 'IYA');
+  const [formError, setFormError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Tentukan nama final berdasarkan mode input
+    setFormError('');
+
     const finalName = inputMode === 'select' ? selectedDoc : manualName;
 
     if (!finalName) {
-      alert('Mohon pilih atau isi nama dokumen.');
+      setFormError('Mohon pilih atau isi nama dokumen.');
       return;
     }
 
@@ -148,7 +182,12 @@ function FlagForm({ flag, kodeAkunId, onSuccess, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Pilihan Mode Input */}
+      {formError && (
+        <div className="bg-red-50 text-red-600 p-3 rounded text-sm flex items-center gap-2">
+          <AlertCircle size={16} /> {formError}
+        </div>
+      )}
+
       <div>
         <label className="form-label">Nama Dokumen / Persyaratan</label>
 
@@ -229,15 +268,30 @@ function FlagForm({ flag, kodeAkunId, onSuccess, onCancel }) {
   );
 }
 
+// --- MAIN PAGE ---
 function FlagManagementPage() {
   const queryClient = useQueryClient();
   const [selectedKodeAkunId, setSelectedKodeAkunId] = useState('');
 
+  // UI States
   const [flagModalState, setFlagModalState] = useState({
     isOpen: false,
     flag: null,
   });
   const [akunModalOpen, setAkunModalOpen] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  // Auto-dismiss notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showNotify = (message, type = 'success') => {
+    setNotification({ message, type });
+  };
 
   // 1. Fetch Kode Akun List
   const { data: kodeAkunList, isLoading: isLoadingKodeAkun } = useQuery({
@@ -262,9 +316,12 @@ function FlagManagementPage() {
       queryClient.invalidateQueries({ queryKey: ['kodeAkun'] });
       setAkunModalOpen(false);
       if (res.data?.id) setSelectedKodeAkunId(res.data.id);
-      alert('Kode Akun berhasil dibuat!');
+      showNotify('Kode Akun berhasil dibuat!', 'success');
     },
-    onError: (err) => alert(err.response?.data?.error || 'Gagal membuat akun'),
+    onError: (err) => {
+      console.error('Error creating akun:', err);
+      showNotify(err.response?.data?.error || 'Gagal membuat akun', 'error');
+    },
   });
 
   // 4. Mutation: Save Flag
@@ -279,8 +336,15 @@ function FlagManagementPage() {
         queryKey: ['flags', selectedKodeAkunId],
       });
       setFlagModalState({ isOpen: false, flag: null });
+      showNotify('Persyaratan dokumen berhasil disimpan!', 'success');
     },
-    onError: (err) => alert(err.response?.data?.error || 'Terjadi kesalahan'),
+    onError: (err) => {
+      console.error('Error saving flag:', err);
+      showNotify(
+        err.response?.data?.error || 'Terjadi kesalahan saat menyimpan',
+        'error',
+      );
+    },
   });
 
   // 5. Mutation: Delete Flag
@@ -290,6 +354,11 @@ function FlagManagementPage() {
       queryClient.invalidateQueries({
         queryKey: ['flags', selectedKodeAkunId],
       });
+      showNotify('Persyaratan dokumen berhasil dihapus.', 'success');
+    },
+    onError: (err) => {
+      console.error('Error deleting flag:', err);
+      showNotify('Gagal menghapus data.', 'error');
     },
   });
 
@@ -318,6 +387,12 @@ function FlagManagementPage() {
           Kode Akun Baru
         </button>
       </div>
+
+      {/* NOTIFICATION AREA */}
+      <NotificationBanner
+        notification={notification}
+        onClose={() => setNotification(null)}
+      />
 
       <div className="bg-white p-6 rounded-xl shadow-md">
         <div className="max-w-md">
