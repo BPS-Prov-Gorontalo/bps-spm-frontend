@@ -1,7 +1,7 @@
 // src/pages/SpmCreatePage.jsx
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useLocation, Link } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useSatker } from '../contexts/SatkerContext';
 import apiClient from '../api';
@@ -10,12 +10,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusBadge from '../components/StatusBadge';
 import CommentModal from '../components/CommentModal';
 import Modal from '../components/Modal';
+import ProgressBar from '../components/ProgressBar';
 import {
   Plus,
   Building,
   MessageSquareWarning,
   Link as LinkIcon,
   CheckCircle,
+  FileCheck,
 } from 'lucide-react';
 
 const formatCurrency = (number) =>
@@ -36,9 +38,29 @@ const getDefaultTanggal = (year) => {
 function SpmCreatePage({ isEditMode = false }) {
   const { id: spmId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { selectedSatkerId, tahunAnggaran: selectedYear } = useSatker();
+
+  // --- CHECK SOURCE NAVIGATION ---
+  const searchParams = new URLSearchParams(location.search);
+  const fromSource =
+    searchParams.get('from') ||
+    (location.state?.from ? location.state.from.replace('/', '') : null);
+
+  const isFromLaporanSpm = fromSource === 'laporanspm';
+  const isFromRincian = fromSource === 'rincian';
+
+  const handleBackNavigation = () => {
+    if (isFromLaporanSpm) {
+      navigate('/laporanspm');
+    } else if (isFromRincian) {
+      navigate('/rincian');
+    } else {
+      navigate('/spm');
+    }
+  };
 
   // --- CHECK IF USER IS VIEWER ---
   const isViewer = user?.role === 'viewer';
@@ -82,6 +104,21 @@ function SpmCreatePage({ isEditMode = false }) {
     ? 'Memuat...'
     : satkerList?.find((s) => s.id === satkerIdForSpm)?.nama ||
       'Tidak Diketahui';
+
+  // --- CALCULATE OVERALL COMPLETENESS PERCENTAGE ---
+  const completenessPercentage =
+    existingSpmData?.completenessPercentage !== undefined
+      ? existingSpmData.completenessPercentage
+      : location.state?.completenessPercentage !== undefined
+      ? location.state.completenessPercentage
+      : existingSpmData?.rincian?.length
+      ? Math.round(
+          existingSpmData.rincian.reduce(
+            (sum, r) => sum + (r.persentaseKelengkapan || 0),
+            0
+          ) / existingSpmData.rincian.length
+        )
+      : 0;
 
   useEffect(() => {
     if (isEditMode && existingSpmData) {
@@ -135,7 +172,7 @@ function SpmCreatePage({ isEditMode = false }) {
       queryClient.invalidateQueries({ queryKey: ['spm', spmId] });
       setIsCommentModalOpen(false);
       setIsAcceptModalOpen(false);
-      navigate('/spm');
+      handleBackNavigation();
     },
     onError: (err) =>
       setError(err.response?.data?.error || 'Gagal memperbarui status SPM.'),
@@ -244,20 +281,23 @@ function SpmCreatePage({ isEditMode = false }) {
     const payload = getPayload();
     saveSpm(payload, {
       onSuccess: () => {
-        navigate('/spm');
+        handleBackNavigation();
       },
     });
   };
 
-  // --- FIX: DISABLED LOGIC UPDATED ---
-  // Now explicitly disables form if status is DITERIMA, regardless of role.
+  // --- ROLE & PERMISSION CHECK ---
+  const isSupervisor = user?.role === 'supervisor';
+
+  // SPM yang berstatus DITERIMA hanya bisa diedit oleh Supervisor
   const isFormDisabled =
-    isViewer || (isEditMode && existingSpmData?.status === 'DITERIMA');
+    isViewer ||
+    (isEditMode && existingSpmData?.status === 'DITERIMA' && !isSupervisor);
 
   const showValidationButtons =
     !isViewer &&
     isEditMode &&
-    user.role === 'supervisor' &&
+    isSupervisor &&
     existingSpmData?.status === 'MENUNGGU';
 
   const showSaveButtons = !isFormDisabled && !isViewer;
@@ -271,9 +311,33 @@ function SpmCreatePage({ isEditMode = false }) {
       <div className="bg-white p-6 rounded-xl shadow-md">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-6">
           <div className="mb-4 sm:mb-0">
+            {isFromLaporanSpm && (
+              <div className="flex items-center gap-2 text-xs text-bpsBlue font-medium mb-1.5">
+                <Link
+                  to="/laporanspm"
+                  className="hover:underline flex items-center gap-1"
+                >
+                  <span>Laporan Kelengkapan SPM</span>
+                </Link>
+                <span className="text-gray-400">/</span>
+                <span className="text-gray-500">Detail SPM</span>
+              </div>
+            )}
+            {isFromRincian && (
+              <div className="flex items-center gap-2 text-xs text-bpsBlue font-medium mb-1.5">
+                <Link
+                  to="/rincian"
+                  className="hover:underline flex items-center gap-1"
+                >
+                  <span>Rincian Belanja</span>
+                </Link>
+                <span className="text-gray-400">/</span>
+                <span className="text-gray-500">Detail SPM</span>
+              </div>
+            )}
             <h1 className="text-3xl font-bold text-gray-800">
               {isEditMode
-                ? isViewer
+                ? isViewer || (existingSpmData?.status === 'DITERIMA' && !isSupervisor)
                   ? 'Detail SPM'
                   : 'Detail / Edit SPM'
                 : 'Buat SPM Baru'}
@@ -287,6 +351,49 @@ function SpmCreatePage({ isEditMode = false }) {
             <StatusBadge status={existingSpmData.status} />
           )}
         </div>
+
+        {/* --- PROGRESS KELENGKAPAN DOKUMEN --- */}
+        {isEditMode && (existingSpmData || location.state?.completenessPercentage !== undefined) && (
+          <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-slate-50 border border-blue-100 rounded-xl p-5 mb-6 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-bpsBlue text-white rounded-xl shadow-md shadow-blue-500/20">
+                  <FileCheck size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-base font-bold text-gray-800">
+                      Progress Kelengkapan Dokumen
+                    </h3>
+                    <span
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                        completenessPercentage >= 100
+                          ? 'bg-green-100 text-green-700 border border-green-200'
+                          : completenessPercentage >= 50
+                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                          : 'bg-red-100 text-red-700 border border-red-200'
+                      }`}
+                    >
+                      {completenessPercentage >= 100
+                        ? 'Dokumen Lengkap'
+                        : `${completenessPercentage}% Terpenuhi`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Analisis kelengkapan berkas & checklist dokumen pendukung SPM ini.
+                  </p>
+                </div>
+              </div>
+              <div className="w-full md:w-72 lg:w-80 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center text-xs font-medium text-slate-500 mb-1.5">
+                  <span>Status Kelengkapan</span>
+                  <span className="font-bold text-slate-700">{completenessPercentage}%</span>
+                </div>
+                <ProgressBar percentage={completenessPercentage} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {existingSpmData?.status === 'DITOLAK' &&
           existingSpmData.rejectionComment && (
@@ -313,14 +420,22 @@ function SpmCreatePage({ isEditMode = false }) {
         )}
 
         {/* --- UI FEEDBACK FOR LOCKED SPM --- */}
-        {isFormDisabled && !isViewer && (
-          <div className="bg-blue-100 p-4 mb-6 rounded-md border border-blue-200 text-blue-900 flex items-center gap-2">
-            <CheckCircle size={20} className="text-blue-700" />
-            <span>
-              SPM ini sudah <strong>Diterima (Final)</strong> dan terkunci.
-              Tidak dapat diubah kembali.
-            </span>
-          </div>
+        {existingSpmData?.status === 'DITERIMA' && !isViewer && (
+          isSupervisor ? (
+            <div className="bg-amber-50 p-4 mb-6 rounded-md border border-amber-200 text-amber-900 flex items-center gap-2.5">
+              <CheckCircle size={20} className="text-amber-600 flex-shrink-0" />
+              <span>
+                SPM ini berstatus <strong>Diterima (Final)</strong>. Sebagai <strong>Supervisor</strong>, Anda memiliki hak akses khusus untuk mengedit data SPM ini jika diperlukan.
+              </span>
+            </div>
+          ) : (
+            <div className="bg-blue-100 p-4 mb-6 rounded-md border border-blue-200 text-blue-900 flex items-center gap-2.5">
+              <CheckCircle size={20} className="text-blue-700 flex-shrink-0" />
+              <span>
+                SPM ini sudah <strong>Diterima (Final)</strong> dan terkunci. Hanya <strong>Supervisor</strong> yang dapat mengubah data SPM yang sudah diterima.
+              </span>
+            </div>
+          )
         )}
 
         {error && <div className="bg-red-100 p-4 mb-6 rounded-md">{error}</div>}
@@ -440,7 +555,7 @@ function SpmCreatePage({ isEditMode = false }) {
 
             <button
               type="button"
-              onClick={() => navigate('/spm')}
+              onClick={handleBackNavigation}
               className="btn-secondary"
               disabled={isSaving || updateStatusMutation.isPending}
             >

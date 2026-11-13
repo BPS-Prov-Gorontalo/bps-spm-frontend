@@ -68,6 +68,41 @@ function Layout() {
       location.pathname === path || location.pathname.startsWith(path + '/')
   );
 
+  // --- ACTIVE NAVBAR STATE HELPER ---
+  const searchParams = new URLSearchParams(location.search);
+  const fromSource =
+    searchParams.get('from') ||
+    (location.state?.from ? location.state.from.replace('/', '') : null);
+
+  const isFromLaporanSpm = fromSource === 'laporanspm';
+  const isFromRincian = fromSource === 'rincian';
+  const isFromReport = isFromLaporanSpm || isFromRincian;
+
+  const isDaftarSpmActive =
+    location.pathname.startsWith('/spm') && !isFromReport;
+
+  const isKelengkapanSpmActive =
+    location.pathname === '/laporanspm' || isFromLaporanSpm;
+
+  const isRincianActive =
+    location.pathname === '/rincian' || isFromRincian;
+
+  const isReportActive =
+    [
+      '/laporanspm',
+      '/rincian',
+      '/laporan/sakti-comparison',
+      '/performa',
+    ].some(
+      (path) =>
+        location.pathname === path || location.pathname.startsWith(path + '/')
+    ) || isFromReport;
+
+  const isSettingsActive = ['/flags', '/users'].some(
+    (path) =>
+      location.pathname === path || location.pathname.startsWith(path + '/')
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
       {/* Navbar */}
@@ -107,8 +142,8 @@ function Layout() {
               </NavLink>
               <NavLink
                 to="/spm"
-                className={({ isActive }) =>
-                  `${navLinkBaseStyle} ${isActive ? activeLinkStyle : ''}`
+                className={() =>
+                  `${navLinkBaseStyle} ${isDaftarSpmActive ? activeLinkStyle : ''}`
                 }
               >
                 <FileText size={16} />
@@ -118,7 +153,9 @@ function Layout() {
               {/* Desktop Reports Dropdown */}
               <div className="relative group h-full flex items-center">
                 <button
-                  className={`${navLinkBaseStyle} group-hover:bg-white/10`}
+                  className={`${navLinkBaseStyle} ${
+                    isReportActive ? activeLinkStyle : ''
+                  } group-hover:bg-white/10`}
                 >
                   <BarChart3 size={16} />
                   <span>Laporan</span>
@@ -131,8 +168,12 @@ function Layout() {
                   <div className="bg-white rounded-md shadow-xl p-2">
                     <NavLink
                       to="/laporanspm"
-                      className={({ isActive }) =>
-                        `${dropdownItemStyle} ${isActive ? 'bg-blue-50' : ''}`
+                      className={() =>
+                        `${dropdownItemStyle} ${
+                          isKelengkapanSpmActive
+                            ? 'bg-blue-50 text-bpsBlue font-semibold'
+                            : ''
+                        }`
                       }
                     >
                       <FileText size={16} className="text-bpsBlue-light" />
@@ -140,8 +181,12 @@ function Layout() {
                     </NavLink>
                     <NavLink
                       to="/rincian"
-                      className={({ isActive }) =>
-                        `${dropdownItemStyle} ${isActive ? 'bg-blue-50' : ''}`
+                      className={() =>
+                        `${dropdownItemStyle} ${
+                          isRincianActive
+                            ? 'bg-blue-50 text-bpsBlue font-semibold'
+                            : ''
+                        }`
                       }
                     >
                       <BookCopy size={16} className="text-bpsBlue-light" />
@@ -175,7 +220,9 @@ function Layout() {
               {isAdminOrProv && (
                 <div className="relative group h-full flex items-center">
                   <button
-                    className={`${navLinkBaseStyle} group-hover:bg-white/10`}
+                    className={`${navLinkBaseStyle} ${
+                      isSettingsActive ? activeLinkStyle : ''
+                    } group-hover:bg-white/10`}
                   >
                     <Settings size={16} />
                     <span>Settings</span>
@@ -278,8 +325,10 @@ function Layout() {
               <NavLink
                 to="/spm"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `${mobileLinkStyle} ${isActive ? mobileActiveLinkStyle : ''}`
+                className={() =>
+                  `${mobileLinkStyle} ${
+                    isDaftarSpmActive ? mobileActiveLinkStyle : ''
+                  }`
                 }
               >
                 <FileText size={20} />
@@ -290,7 +339,9 @@ function Layout() {
               <div>
                 <button
                   onClick={() => toggleMobileDropdown('reports')}
-                  className={`w-full ${mobileLinkStyle} justify-between`}
+                  className={`w-full ${mobileLinkStyle} justify-between ${
+                    isReportActive ? mobileActiveLinkStyle : ''
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <BarChart3 size={20} />
@@ -308,14 +359,22 @@ function Layout() {
                     <NavLink
                       to="/laporanspm"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={mobileSubmenuStyle}
+                      className={`${mobileSubmenuStyle} ${
+                        isKelengkapanSpmActive
+                          ? 'bg-white/10 text-white font-semibold'
+                          : ''
+                      }`}
                     >
                       Kelengkapan SPM
                     </NavLink>
                     <NavLink
                       to="/rincian"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={mobileSubmenuStyle}
+                      className={`${mobileSubmenuStyle} ${
+                        isRincianActive
+                          ? 'bg-white/10 text-white font-semibold'
+                          : ''
+                      }`}
                     >
                       Rincian Belanja (App)
                     </NavLink>
@@ -344,7 +403,9 @@ function Layout() {
                 <div>
                   <button
                     onClick={() => toggleMobileDropdown('settings')}
-                    className={`w-full ${mobileLinkStyle} justify-between`}
+                    className={`w-full ${mobileLinkStyle} justify-between ${
+                      isSettingsActive ? mobileActiveLinkStyle : ''
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <Settings size={20} />

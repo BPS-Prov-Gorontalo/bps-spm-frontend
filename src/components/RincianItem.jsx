@@ -103,6 +103,13 @@ function RincianItem({ itemData, kodeAkunId, onUpdate, onRemove, isOnlyItem }) {
   const hasCatatan = itemData.catatan && itemData.catatan.trim() !== '';
   const showCatatan = isSupervisor || hasCatatan;
 
+  const totalFlags = flags?.length || 0;
+  const validFlagsCount = (itemData.jawabanFlags || []).filter(
+    (f) => f.tipe === 'IYA' || f.tipe === 'IYA_TIDAK'
+  ).length;
+  const rincianPercentage =
+    totalFlags > 0 ? Math.round((validFlagsCount / totalFlags) * 100) : 100;
+
   return (
     <div className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm relative space-y-5 transition-shadow hover:shadow-md">
       {!isOnlyItem && (
@@ -213,10 +220,25 @@ function RincianItem({ itemData, kodeAkunId, onUpdate, onRemove, isOnlyItem }) {
       {/* --- Row 3: Flags / Checklist (Redesigned) --- */}
       <div className="pt-4 border-t border-slate-100">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-          <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-            <CheckCheck size={18} className="text-bpsBlue" />
-            Kelengkapan Dokumen
-          </h4>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <CheckCheck size={18} className="text-bpsBlue" />
+              Kelengkapan Dokumen
+            </h4>
+            {flags && flags.length > 0 && (
+              <span
+                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                  rincianPercentage >= 100
+                    ? 'bg-green-100 text-green-700 border border-green-200'
+                    : rincianPercentage >= 50
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                    : 'bg-red-100 text-red-700 border border-red-200'
+                }`}
+              >
+                {validFlagsCount}/{totalFlags} Dokumen ({rincianPercentage}%)
+              </span>
+            )}
+          </div>
 
           {flags && flags.length > 0 && (
             <div className="flex gap-2 text-xs">

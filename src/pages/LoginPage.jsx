@@ -41,14 +41,14 @@ function LoginPage() {
         {/* Image Section */}
         <div className="hidden md:block w-1/2">
           <img
-            src="Login_Asset.png" // Make sure this path is correct
+            src="loginasset.png" // Make sure this path is correct
             alt="Illustrasi BPS"
             className="w-full h-full object-cover"
           />
         </div>
         <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
           <h1 className="font-lato font-bold text-2xl text-bpsBlue mb-2">
-            Sistem Surat Perintah Membayar (SPM)
+            Sipanda : Sistem Pengawasan Administrasi
           </h1>
           <h2 className="text-xl font-semibold text-gray-700 mb-2">
             Selamat Datang Kembali
