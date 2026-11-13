@@ -1,8 +1,12 @@
 import axios from "axios";
 
 // Buat instance Axios dengan konfigurasi dasar
+// Prioritaskan environment variable VITE_API_BASE_URL.
+// Jika tidak disetel: gunakan http://localhost:3000/api saat mode development, dan /api saat production build.
 const apiClient = axios.create({
-  baseURL: "http://localhost:3000/api", // Sesuaikan dengan URL backend Anda
+  baseURL:
+    import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.DEV ? "http://localhost:3000/api" : "/api"),
 });
 
 // Gunakan interceptor untuk menambahkan token JWT ke setiap permintaan secara otomatis
